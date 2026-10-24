@@ -1,0 +1,1 @@
+"""Local OpenVPN web application."""
