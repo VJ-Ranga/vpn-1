@@ -49,10 +49,13 @@ const startupPath = () => {
   );
 };
 app.setName("Northstar VPN");
+if (process.platform === "win32") app.setAppUserModelId("org.northstarvpn.desktop");
 // A static control panel does not need GPU acceleration on hybrid Linux laptops.
 app.disableHardwareAcceleration();
 
 function icon() {
+  const brand = nativeImage.createFromPath(path.join(root, "assets", "northstar-vpn.png"));
+  if (!brand.isEmpty()) return brand.resize({ width: 32, height: 32 });
   const bitmap = Buffer.alloc(32 * 32 * 4);
   for (let y = 3; y < 29; y++)
     for (let x = 4; x < 28; x++) {

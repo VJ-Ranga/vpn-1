@@ -40,6 +40,8 @@ if (-not $SkipPythonBuild) {
         --paths system --hidden-import win32timezone system/windows_service.py
     if ($LASTEXITCODE -ne 0) { throw 'Helper freeze failed.' }
 }
+npm run icons:windows
+if ($LASTEXITCODE -ne 0) { throw 'Windows icon generation failed.' }
 npm --prefix frontend run build
 if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed.' }
 $env:CSC_IDENTITY_AUTO_DISCOVERY = 'false'

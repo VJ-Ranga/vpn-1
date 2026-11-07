@@ -1,12 +1,15 @@
-# Publish only software source, dependency manifests, and setup instructions.
+# Track source, build assets, and explicitly approved split Windows installers.
 # Everything else stays local unless explicitly allowed below.
 *
 !/.gitignore
+!/.gitattributes
 !/README.md
 !/package.json
 !/package-lock.json
 !/assets/
 !/assets/*.svg
+!/assets/*.ico
+!/assets/*.png
 !/backend/
 !/backend/pyproject.toml
 !/backend/windows_entry.py
@@ -35,8 +38,16 @@
 !/scripts/*.sh
 !/scripts/*.ps1
 !/scripts/*.nsh
+!/scripts/*.cjs
 !/system/
 !/system/*.py
+!/installers/
+!/installers/README.md
+!/installers/windows/
+!/installers/windows/*.exe.part[12]
+!/installers/windows/Install.cmd
+!/installers/windows/Install.ps1
+!/installers/windows/SHA256SUMS.txt
 
 # Defense in depth for private files within allowed source directories.
 **/.env

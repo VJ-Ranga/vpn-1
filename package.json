@@ -1,6 +1,6 @@
 {
   "name": "northstar-vpn-desktop",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Independent desktop client for FastVPN OpenVPN profiles",
   "main": "desktop/main.cjs",
@@ -9,29 +9,76 @@
     "build": "npm --prefix frontend run build",
     "test:desktop": "node --test desktop/tests/*.test.cjs",
     "check:desktop": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/backend.cjs",
-    "dist:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1"
+    "dist:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1",
+    "icons:windows": "node scripts/generate-windows-icons.cjs"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "2.6.2",
     "electron": "^45.0.0",
     "electron-builder": "26.18.0"
   },
   "build": {
     "appId": "org.northstarvpn.desktop",
     "productName": "Northstar VPN",
-    "directories": { "output": "release" },
+    "directories": {
+      "output": "release"
+    },
     "electronDist": "node_modules/electron/dist",
     "asar": true,
     "npmRebuild": false,
-    "files": ["desktop/**/*.cjs", "!desktop/tests/**", "assets/**", "package.json"],
-    "extraResources": [
-      { "from": "release/python/NorthstarBackend", "to": "backend" },
-      { "from": "release/python/NorthstarHelper", "to": "helper" },
-      { "from": "frontend/dist", "to": "frontend/dist" },
-      { "from": "release/profiles", "to": "profiles", "filter": ["tcp/*.ovpn", "udp/*.ovpn"] },
-      { "from": "release/vendor/OpenVPN.msi", "to": "vendor/OpenVPN.msi" },
-      { "from": "scripts", "to": "scripts", "filter": ["install-windows-service.ps1", "windows-ipv6-guard.ps1"] }
+    "files": [
+      "desktop/**/*.cjs",
+      "!desktop/tests/**",
+      "assets/**",
+      "package.json"
     ],
-    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }], "signAndEditExecutable": false },
+    "extraResources": [
+      {
+        "from": "release/python/NorthstarBackend",
+        "to": "backend"
+      },
+      {
+        "from": "release/python/NorthstarHelper",
+        "to": "helper"
+      },
+      {
+        "from": "frontend/dist",
+        "to": "frontend/dist"
+      },
+      {
+        "from": "release/profiles",
+        "to": "profiles",
+        "filter": [
+          "tcp/*.ovpn",
+          "udp/*.ovpn"
+        ]
+      },
+      {
+        "from": "release/vendor/OpenVPN.msi",
+        "to": "vendor/OpenVPN.msi"
+      },
+      {
+        "from": "scripts",
+        "to": "scripts",
+        "filter": [
+          "install-windows-service.ps1",
+          "windows-ipv6-guard.ps1"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/northstar-vpn.ico",
+      "signAndEditExecutable": true,
+      "signExecutable": false
+    },
     "nsis": {
       "oneClick": false,
       "perMachine": true,
@@ -41,6 +88,8 @@
       "createStartMenuShortcut": true,
       "runAfterFinish": false,
       "include": "scripts/windows-installer.nsh",
+      "installerIcon": "assets/northstar-vpn.ico",
+      "uninstallerIcon": "assets/northstar-vpn.ico",
       "artifactName": "Northstar-VPN-${version}-Setup-x64.exe"
     }
   }

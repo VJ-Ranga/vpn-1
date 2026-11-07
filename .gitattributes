@@ -1,0 +1,1 @@
+installers/windows/*.exe.part* -text -diff
