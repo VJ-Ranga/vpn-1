@@ -26,16 +26,24 @@ export function SettingsPanel() {
       await api.saveCredentials({ username, password });
       setConfigured(true);
       setPassword("");
-      setMessage("Credentials saved to Secret Service.");
+      setMessage("Credentials saved to the operating system credential store.");
     } catch (err) {
       setMessage((err as Error).message);
     }
   };
   const checkHealth = async () => {
     try {
-      const v = await api.health();
+      const v = (await api.health()) as {
+        platform?: string;
+        network_manager?: boolean;
+        openvpn_plugin?: boolean;
+        openvpn_exe?: boolean;
+        helper?: { available?: boolean };
+      };
       setHealth(
-        `NetworkManager ${v.network_manager ? "ready" : "unavailable"} · OpenVPN plugin ${v.openvpn_plugin ? "ready" : "unavailable"}`,
+        v.platform === "windows"
+          ? `Windows helper ${v.helper?.available ? "ready" : "unavailable"} · OpenVPN ${v.openvpn_exe ? "ready" : "unavailable"}`
+          : `NetworkManager ${v.network_manager ? "ready" : "unavailable"} · OpenVPN plugin ${v.openvpn_plugin ? "ready" : "unavailable"}`,
       );
     } catch (err) {
       setHealth((err as Error).message);
@@ -60,7 +68,7 @@ export function SettingsPanel() {
         </div>
       </div>
       <p className="muted">
-        Stored in Linux Secret Service. Password never returns to browser.
+        Stored in the operating system credential store. Password never returns to browser.
       </p>
       <form onSubmit={save}>
         <input

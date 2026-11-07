@@ -63,7 +63,8 @@ function quoted(value) {
   return `"${value.replace(/[\\"`$]/g, "\\$&")}"`;
 }
 function desktopEntry(root) {
-  return `[Desktop Entry]\nType=Application\nName=Northstar VPN\nComment=Independent FastVPN client for Linux\nExec=${quoted(path.join(root, "scripts/start-desktop.sh"))} --background\nIcon=${path.join(root, "assets/northstar-vpn.svg")}\nTerminal=false\nCategories=Network;Security;\nStartupWMClass=northstar-vpn-desktop\nX-GNOME-Autostart-enabled=true\n`;
+  const posix = path.posix || path;
+  return `[Desktop Entry]\nType=Application\nName=Northstar VPN\nComment=Independent FastVPN client for Linux\nExec=${quoted(posix.join(root.replace(/\\/g, "/"), "scripts/start-desktop.sh"))} --background\nIcon=${posix.join(root.replace(/\\/g, "/"), "assets/northstar-vpn.svg")}\nTerminal=false\nCategories=Network;Security;\nStartupWMClass=northstar-vpn-desktop\nX-GNOME-Autostart-enabled=true\n`;
 }
 
 module.exports = {

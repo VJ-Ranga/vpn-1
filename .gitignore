@@ -9,6 +9,7 @@
 !/assets/*.svg
 !/backend/
 !/backend/pyproject.toml
+!/backend/windows_entry.py
 !/backend/app/
 !/backend/app/*.py
 !/backend/tests/
@@ -32,6 +33,8 @@
 !/frontend/src/**/*.css
 !/scripts/
 !/scripts/*.sh
+!/scripts/*.ps1
+!/scripts/*.nsh
 !/system/
 !/system/*.py
 
@@ -46,4 +49,6 @@
 **/*credentials*
 **/desktop-state.json
 **/settings.json
+**/helper.token
+**/auth.txt
 **/*.log

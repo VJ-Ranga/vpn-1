@@ -55,6 +55,10 @@ def test_active_parses_uuid_and_runtime_details():
     assert active.remote_endpoint == "203.0.113.10"
 
 
+import platform
+import pytest
+
+@pytest.mark.skipif(platform.system() == "Windows", reason="executable permission bits are not available on Windows")
 def test_health_detects_openvpn_plugin_service_not_generic_vpn_connection(monkeypatch, tmp_path):
     plugin = tmp_path / "nm-openvpn-service"
     plugin.write_text("")

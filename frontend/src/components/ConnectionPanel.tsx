@@ -90,7 +90,7 @@ export function ConnectionPanel({
             <Wifi size={43} strokeWidth={1.7} />
           )}
         </div>
-        <h2>{busy ? "Connecting…" : connected ? "VPN Connected" : "Wi-Fi"}</h2>
+        <h2>{busy ? "Connecting…" : connected ? protection.platform === "windows" ? "VPN Connected (IPv4)" : "VPN Connected" : "Wi-Fi"}</h2>
         <p>
           {busy
             ? "Preparing your protected connection"
@@ -171,7 +171,11 @@ export function ConnectionPanel({
                 : protection.active
                   ? "Network protection active"
                   : "Protection ready"
-              : "Protection setup required"}
+              : protection.platform === "windows"
+                ? protection.ipv6_blocked
+                  ? "IPv6 blocked · DNS / kill switch unavailable"
+                  : "IPv6 block inactive · DNS / kill switch unavailable"
+                : "Protection setup required"}
           </span>
         </div>
         {connected && (

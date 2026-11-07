@@ -16,14 +16,17 @@ async function freePort() {
 async function waitForBackend(
   origin,
   identity,
-  timeout = 20000,
+  timeout = 60000,
   request = fetch,
 ) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     try {
       const response = await request(`${origin}/api/health`, {
-        signal: AbortSignal.timeout(2000),
+        // Windows helper health includes a firewall-policy query. A 2-second
+        // deadline repeatedly aborted valid cold-start responses once the
+        // installed service was running, preventing desktop startup entirely.
+        signal: AbortSignal.timeout(30000),
       });
       if (response.ok && (await response.json()).instance === identity) return;
     } catch {
@@ -32,7 +35,7 @@ async function waitForBackend(
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
   throw new Error(
-    "Backend could not start. Check Python dependencies and the desktop backend log.",
+    "Backend could not start. See the desktop backend log for details.",
   );
 }
 
@@ -40,32 +43,45 @@ function stopBackend(child) {
   if (child && child.exitCode === null && !child.killed) child.kill("SIGTERM");
 }
 
-async function startBackend(root, token, identity, log) {
+function backendLaunchPlan(root, token, identity, port, {
+  packaged = false,
+  resourcesPath = process.resourcesPath,
+  platform = process.platform,
+  env = process.env,
+} = {}) {
+  const bundled = packaged && platform === "win32";
+  const childEnv = { ...env };
+  if (bundled) {
+    for (const key of Object.keys(childEnv)) {
+      if (/^PYTHON/i.test(key) || /^_PYI_/i.test(key) ||
+          /^(VIRTUAL_ENV|__PYVENV_LAUNCHER__|VPN_PYTHON|VPN_WINDOWS_HELPER_(TOKEN|HOST|PORT))$/i.test(key))
+        delete childEnv[key];
+    }
+    childEnv.VPN_PROFILE_ROOT = path.join(resourcesPath, "profiles");
+  }
+  Object.assign(childEnv, {
+    VPN_UI_PORT: String(port), VPN_API_TOKEN: token, VPN_INSTANCE: identity,
+  });
+  const args = ["--host", "127.0.0.1", "--port", String(port)];
+  return {
+    command: bundled ? path.join(resourcesPath, "backend", "NorthstarBackend.exe") :
+      env.VPN_PYTHON || (platform === "win32" ? "python" : "python3"),
+    args: bundled ? args : ["-m", "uvicorn", "app.main:app", ...args, "--no-access-log"],
+    options: {
+      cwd: bundled ? resourcesPath : path.join(root, "backend"),
+      env: childEnv,
+      windowsHide: true,
+    },
+  };
+}
+
+async function startBackend(root, token, identity, log, options = {}) {
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
-  const child = spawn(
-    process.env.VPN_PYTHON || "python3",
-    [
-      "-m",
-      "uvicorn",
-      "app.main:app",
-      "--host",
-      "127.0.0.1",
-      "--port",
-      String(port),
-      "--no-access-log",
-    ],
-    {
-      cwd: path.join(root, "backend"),
-      env: {
-        ...process.env,
-        VPN_UI_PORT: String(port),
-        VPN_API_TOKEN: token,
-        VPN_INSTANCE: identity,
-      },
-      stdio: ["ignore", log, log],
-    },
-  );
+  const plan = backendLaunchPlan(root, token, identity, port, options);
+  const child = spawn(plan.command, plan.args, {
+    ...plan.options, stdio: ["ignore", log, log],
+  });
   let failure;
   child.on("error", (error) => {
     failure = error;
@@ -80,4 +96,4 @@ async function startBackend(root, token, identity, log) {
   return { child, origin };
 }
 
-module.exports = { freePort, waitForBackend, stopBackend, startBackend };
+module.exports = { freePort, waitForBackend, stopBackend, startBackend, backendLaunchPlan };

@@ -32,11 +32,22 @@ let backend,
   quitting = false;
 let state = { connected: false, city: "", favorites: [] };
 let lastNotification = "";
-const startupPath = () =>
-  path.join(
+const startupPath = () => {
+  if (process.platform === "win32")
+    return path.join(
+      app.getPath("appData"),
+      "Microsoft",
+      "Windows",
+      "Start Menu",
+      "Programs",
+      "Startup",
+      "northstar-vpn.cmd",
+    );
+  return path.join(
     process.env.XDG_CONFIG_HOME || path.join(app.getPath("home"), ".config"),
     "autostart/northstar-vpn.desktop",
   );
+};
 app.setName("Northstar VPN");
 // A static control panel does not need GPU acceleration on hybrid Linux laptops.
 app.disableHardwareAcceleration();
@@ -71,7 +82,7 @@ function createWindow(compact = false) {
     minWidth: compact ? 340 : 850,
     minHeight: compact ? 620 : 650,
     show: false,
-    title: compact ? "Northstar — Compact" : "Northstar VPN for Linux",
+    title: compact ? "Northstar - Compact" : "Northstar VPN",
     backgroundColor: "#ffffff",
     autoHideMenuBar: true,
     icon: icon(),
@@ -157,8 +168,21 @@ else {
       if (fs.existsSync(logPath) && fs.statSync(logPath).size > 2 * 1024 * 1024)
         fs.renameSync(logPath, `${logPath}.old`);
       const log = fs.openSync(logPath, "a", 0o600);
-      backend = await startBackend(root, token, identity, log);
-      fs.closeSync(log);
+      if (!app.isPackaged && process.platform === "win32") {
+        const venvPython = path.join(root, "backend", ".venv", "Scripts", "python.exe");
+        if (fs.existsSync(venvPython)) process.env.VPN_PYTHON = venvPython;
+      } else if (!app.isPackaged) {
+        const venvPython = path.join(root, "backend", ".venv", "bin", "python");
+        if (fs.existsSync(venvPython)) process.env.VPN_PYTHON = venvPython;
+      }
+      try {
+        backend = await startBackend(root, token, identity, log, {
+          packaged: app.isPackaged,
+          resourcesPath: process.resourcesPath,
+        });
+      } finally {
+        fs.closeSync(log);
+      }
       session.defaultSession.setPermissionRequestHandler(
         (_contents, _permission, callback) => callback(false),
       );
@@ -191,21 +215,38 @@ else {
       tray.on("click", showMain);
       if (!process.argv.includes("--background"))
         mainWindow.once("ready-to-show", showMain);
-      ipcMain.handle("northstar:get-startup", (event) => {
-        trusted(event);
-        return fs.existsSync(startupPath());
-      });
-      ipcMain.handle("northstar:set-startup", (event, enabled) => {
-        trusted(event);
-        if (typeof enabled !== "boolean")
-          throw new Error("Invalid startup value");
-        const target = startupPath();
-        if (enabled) {
-          fs.mkdirSync(path.dirname(target), { recursive: true });
-          fs.writeFileSync(target, desktopEntry(root), { mode: 0o600 });
-        } else fs.rmSync(target, { force: true });
-        return enabled;
-      });
+      if (process.platform === "win32") {
+        ipcMain.handle("northstar:get-startup", (event) => {
+          trusted(event);
+          return app.getLoginItemSettings().openAtLogin;
+        });
+        ipcMain.handle("northstar:set-startup", (event, enabled) => {
+          trusted(event);
+          if (typeof enabled !== "boolean")
+            throw new Error("Invalid startup value");
+          app.setLoginItemSettings({
+            openAtLogin: enabled,
+            args: ["--background"],
+          });
+          return enabled;
+        });
+      } else {
+        ipcMain.handle("northstar:get-startup", (event) => {
+          trusted(event);
+          return fs.existsSync(startupPath());
+        });
+        ipcMain.handle("northstar:set-startup", (event, enabled) => {
+          trusted(event);
+          if (typeof enabled !== "boolean")
+            throw new Error("Invalid startup value");
+          const target = startupPath();
+          if (enabled) {
+            fs.mkdirSync(path.dirname(target), { recursive: true });
+            fs.writeFileSync(target, desktopEntry(root), { mode: 0o600 });
+          } else fs.rmSync(target, { force: true });
+          return enabled;
+        });
+      }
       ipcMain.handle("northstar:external", (event, url) => {
         trusted(event);
         if (!safeExternal(url)) throw new Error("Unsupported external link");

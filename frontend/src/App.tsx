@@ -411,12 +411,16 @@ export default function App() {
                   <h2>
                     {protection.available
                       ? "Network protection is ready"
-                      : "Finish setting up protection"}
+                      : protection.platform === "windows"
+                        ? "Windows protection is limited to IPv6 blocking"
+                        : "Finish setting up protection"}
                   </h2>
                   <p>
                     {protection.available
                       ? "Manage your IPv6, DNS, and kill-switch preferences in Advanced settings."
-                      : "Install the privileged helper to enable VPN-scoped IPv6 and DNS protection."}
+                      : protection.platform === "windows"
+                        ? "IPv6 blocking is required for Windows VPN connections. DNS protection and the kill switch remain unavailable."
+                        : "Install the privileged helper to enable VPN-scoped IPv6 and DNS protection."}
                   </p>
                   <button
                     className="outline-button"
@@ -508,11 +512,26 @@ export default function App() {
                 <h2>How can we help?</h2>
                 <div className="info-block">
                   <h3>Network protection setup</h3>
-                  <p>
-                    Run this command from your project folder. Administrator
-                    authorization is required once.
-                  </p>
-                  <code>sudo bash scripts/install-protection.sh</code>
+                  {protection.platform === "windows" ? (
+                    <>
+                      <p>
+                        Windows VPN connections require an IPv6 firewall block.
+                        DNS protection and the kill switch are not implemented yet.
+                      </p>
+                      <p>
+                        Windows service installation and network protection are
+                        planned for a later stage.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p>
+                        Run this command from your project folder. Administrator
+                        authorization is required once.
+                      </p>
+                      <code>sudo bash scripts/install-protection.sh</code>
+                    </>
+                  )}
                   <button
                     className="outline-button"
                     onClick={() => void refresh()}

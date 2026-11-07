@@ -1,5 +1,6 @@
 import json
 import os
+import platform
 from pathlib import Path
 import threading
 
@@ -8,7 +9,12 @@ DEFAULTS = {"transport": "udp", "theme": "light", "ipv6_protection": True, "dns_
 
 class SettingsStore:
     def __init__(self, path=None):
-        self.path = Path(path or Path(os.getenv("XDG_CONFIG_HOME", Path.home() / ".config")) / "northstar-vpn/settings.json")
+        if path is not None:
+            self.path = Path(path)
+        elif platform.system() == "Windows":
+            self.path = Path(os.getenv("APPDATA", Path.home() / "AppData" / "Roaming")) / "northstar-vpn" / "settings.json"
+        else:
+            self.path = Path(os.getenv("XDG_CONFIG_HOME", Path.home() / ".config")) / "northstar-vpn" / "settings.json"
         self.lock = threading.RLock()
 
     def get(self):

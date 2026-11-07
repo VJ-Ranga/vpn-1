@@ -35,6 +35,16 @@ test('readiness requires matching backend instance identity', async () => {
   await waitForBackend('http://localhost', 'expected', 100, async () => ({ ok: true, json: async () => ({ instance: 'expected' }) }));
 });
 
+test('readiness tolerates Windows firewall health probes longer than two seconds', async () => {
+  await waitForBackend('http://localhost', 'expected', 5000, async (_url, { signal }) => {
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(resolve, 2200);
+      signal.addEventListener('abort', () => { clearTimeout(timer); reject(signal.reason); }, { once: true });
+    });
+    return { ok: true, json: async () => ({ instance: 'expected' }) };
+  });
+});
+
 test('startup entry safely quotes paths containing spaces', () => {
   const entry = desktopEntry('/home/test/My VPN', '/usr/bin/node');
   assert.match(entry, /Exec="\/home\/test\/My VPN\/scripts\/start-desktop.sh" --background/);

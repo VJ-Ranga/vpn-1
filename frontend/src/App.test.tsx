@@ -12,7 +12,7 @@ beforeEach(() => {
   localStorage.clear();
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
     const url = String(input);
-    const body = url.includes('profiles') ? { profiles } : url === '/api/settings' ? { settings: { ...settings, ...(options?.body ? JSON.parse(String(options.body)) : {}) }, protection: { available: false, active: false } } : url.includes('credentials') ? { configured: false } : { state: 'disconnected', duration_seconds: 0, bytes_in: 0, bytes_out: 0 };
+    const body = url.includes('profiles') ? { profiles } : url === '/api/settings' ? { settings: { ...settings, ...(options?.body ? JSON.parse(String(options.body)) : {}) }, protection: { available: true, active: false } } : url.includes('credentials') ? { configured: false } : { state: 'disconnected', duration_seconds: 0, bytes_in: 0, bytes_out: 0 };
     return { ok: true, json: async () => body } as Response;
   }));
 });
@@ -83,4 +83,27 @@ it('passes explicitly selected endpoint with the profile', async () => {
   await user.selectOptions(screen.getByLabelText('Server endpoint'), 'chi.example');
   await user.click(screen.getByRole('button', { name: 'Connect VPN' }));
   expect(fetch).toHaveBeenCalledWith('/api/connect', expect.objectContaining({ body: JSON.stringify({ profile_id: '1', endpoint: 'chi.example' }) }));
+});
+
+it('shows verified Windows IPv6 blocking without claiming full protection', async () => {
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async (input, options) => ['/api/status', '/api/settings'].includes(String(input))
+    ? { ok: true, json: async () => ({ state: 'connected', settings, protection: {
+      available: false, active: false, platform: 'windows', ipv6_blocked: true,
+    } }) } as Response : original(input, options));
+  render(<App />);
+  expect(await screen.findByText('IPv6 blocked · DNS / kill switch unavailable')).toBeTruthy();
+  expect(await screen.findByText('VPN Connected (IPv4)')).toBeTruthy();
+  expect(screen.queryByText('Network protection active')).toBeNull();
+});
+
+it('does not claim IPv6 blocking when the Windows guard is inactive', async () => {
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async (input, options) => ['/api/status', '/api/settings'].includes(String(input))
+    ? { ok: true, json: async () => ({ state: 'disconnected', settings, protection: {
+      available: false, active: false, platform: 'windows', ipv6_blocked: false,
+    } }) } as Response : original(input, options));
+  render(<App />);
+  expect(await screen.findByText('IPv6 block inactive · DNS / kill switch unavailable')).toBeTruthy();
+  expect(screen.queryByText('IPv6 blocked · DNS / kill switch unavailable')).toBeNull();
 });

@@ -10,6 +10,9 @@ export type Profile = {
 export type Protection = {
   available: boolean;
   active: boolean;
+  platform?: string;
+  ipv6_blocked?: boolean;
+  ipv6_guard_required?: boolean;
   interface?: string | null;
   error?: string | null;
   policy?: Pick<

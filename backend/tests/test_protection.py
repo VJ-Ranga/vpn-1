@@ -108,6 +108,11 @@ def test_commit_requires_verified_tunnel(tmp_path):
         controller.handle({"action": "commit"})
 
 
+import platform
+
+import pytest
+
+@pytest.mark.skipif(platform.system() == "Windows", reason="os.chown is not available on Windows")
 def test_socket_permissions_set_before_changing_owner(monkeypatch):
     calls = []
     class SocketPath:

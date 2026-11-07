@@ -178,33 +178,46 @@ export function PreferencesView({
             </section>
             <section className="version-section">
               <h3>Version</h3>
-              <p>Northstar for Linux · 0.2.0</p>
-              <small>
-                Unofficial client for Namecheap FastVPN. Built for your Linux
-                desktop.
-              </small>
+              <p>Northstar VPN · 0.2.0</p>
+              <small>Unofficial client for Namecheap FastVPN.</small>
             </section>
           </>
         ) : (
           <>
             {!protection.available && (
               <div className="setup-notice">
-                <strong>Install network protection</strong>
-                <p>
-                  One-time administrator setup is required for leak protection
-                  and the kill switch.
-                </p>
-                <code>sudo bash scripts/install-protection.sh</code>
-                <small>
-                  Run from the project folder, then reopen this page.
-                </small>
+                {protection.platform === "windows" ? (
+                  <>
+                    <strong>Windows protection is limited to IPv6 blocking</strong>
+                    <p>
+                      IPv6 blocking is mandatory for VPN connections. DNS protection
+                      and the kill switch are not available. This is not full leak protection.
+                    </p>
+                    <small>
+                      Windows service installation and firewall/DNS integration are
+                      planned for a later stage.
+                    </small>
+                  </>
+                ) : (
+                  <>
+                    <strong>Install network protection</strong>
+                    <p>
+                      One-time administrator setup is required for leak protection
+                      and the kill switch.
+                    </p>
+                    <code>sudo bash scripts/install-protection.sh</code>
+                    <small>
+                      Run from the project folder, then reopen this page.
+                    </small>
+                  </>
+                )}
               </div>
             )}
             <Toggle
               label="Kill Switch"
               description="Block internet traffic outside the VPN, including after disconnect. Turn off to restore ordinary internet access."
               checked={values.kill_switch}
-              disabled={saving}
+              disabled={saving || !protection.available}
               change={() => save({ kill_switch: !values.kill_switch })}
             />
             <Toggle
@@ -226,7 +239,7 @@ export function PreferencesView({
             />
             <Toggle
               label="Split tunneling"
-              description="App and domain routing requires a separate Linux integration."
+              description="App and domain routing requires a separate platform integration."
               disabled
             />
             <Toggle
@@ -238,21 +251,23 @@ export function PreferencesView({
               label="Allow local network devices"
               description="Allow private-network access, such as printers, while protected. Off blocks local bypass when the kill switch is on."
               checked={values.allow_lan}
-              disabled={saving}
+              disabled={saving || !protection.available}
               change={() => save({ allow_lan: !values.allow_lan })}
             />
             <Toggle
               label="IPv6 leak protection"
-              description="Block public IPv6 traffic outside the VPN without disabling IPv6 permanently on Wi-Fi."
-              checked={values.ipv6_protection}
-              disabled={saving}
+              description={protection.platform === "windows"
+                ? "Required for Windows connections. Blocks all IPv6, including LAN, until explicit Disconnect; retained after a helper crash."
+                : "Block public IPv6 traffic outside the VPN without disabling IPv6 permanently on Wi-Fi."}
+              checked={protection.platform === "windows" ? protection.ipv6_blocked === true : values.ipv6_protection}
+              disabled={saving || !protection.available}
               change={() => save({ ipv6_protection: !values.ipv6_protection })}
             />
             <Toggle
               label="DNS leak protection"
               description="Block conventional DNS requests outside the VPN while connected."
               checked={values.dns_protection}
-              disabled={saving}
+              disabled={saving || !protection.available}
               change={() => save({ dns_protection: !values.dns_protection })}
             />
             <Toggle

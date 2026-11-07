@@ -50,7 +50,9 @@ class VpnService:
                     self.started = active.connected_since or time.time()
                     break
         connected = active is not None and (self.state == "connected" or self.active_profile_id is not None)
-        if self.state == "connected" and active is None and self.manager.health()["network_manager"]:
+        health = self.manager.health()
+        adapter_reachable = health.get("reachable", health.get("network_manager", False))
+        if self.state == "connected" and active is None and adapter_reachable:
             self.state = "disconnected"
             self.active_profile_id = self.active_connection_id = None
             self.started = None
@@ -92,7 +94,12 @@ class VpnService:
             "download_bps": rates.download_bps,
             "upload_bps": rates.upload_bps,
             "error": self.error,
-            "protection": self.protection.status() if self.protection else None,
+            "protection": self.protection.status() if self.protection else {
+                "available": False, "active": False, "platform": "windows",
+                "ipv6_blocked": health.get("ipv6_blocked") is True,
+                "ipv6_guard_required": health.get("ipv6_guard_required") is True,
+                "error": "DNS protection and the kill switch are unavailable on Windows.",
+            } if health.get("platform") == "windows" else None,
         }
 
     def connect(self, profile_id: str, endpoint: str | None = None):
@@ -141,9 +148,9 @@ class VpnService:
         with self.lock:
             self.reconnect_requested = False
             active = self.manager.active()
-            if active:
+            if active or getattr(self.manager, "disconnect_when_inactive", False):
                 try:
-                    self.manager.disconnect(active.connection_id)
+                    self.manager.disconnect(active.connection_id if active else None)
                 except NetworkManagerError as exc:
                     self.state, self.error = "error", str(exc)
                     return self.status()

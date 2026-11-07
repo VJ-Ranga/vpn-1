@@ -129,4 +129,71 @@ Set `VPN_SMOKE_OUTPUT=/absolute/path/desktop.png` to save a screenshot and adjac
 
 Settings are stored in `~/.config/northstar-vpn/settings.json`; Electron data and backend logs use its user-data directory (normally `~/.config/Northstar VPN` on Linux). Credentials remain in Secret Service. Public-IP queries contact ipify; speed tests contact Cloudflare; latency checks contact VPN servers.
 
+## Windows development (Stage 1)
+
+### Local Windows installer (preview)
+
+Build an unsigned x64 setup executable with `npm run dist:windows`. The build machine needs the development dependencies plus `pyinstaller` and `pywin32` in `backend/.venv`; the installed application does **not** need Python, Node.js, or a terminal. Build artifacts remain ignored under `release/`. The build downloads official FastVPN profiles (not local profiles/credentials) and an Authenticode-verified official OpenVPN MSI.
+
+The setup executable installs under Program Files, creates desktop/Start Menu shortcuts, installs OpenVPN if missing, and registers the automatic `NorthstarVPNHelper` Windows service. Setup requires UAC once; launch the desktop normally from its shortcut afterward. First disconnect and close the development helper so it does not occupy port 8799. Credentials stay in the current user's Windows Credential Manager and are not bundled. The installing Windows account is the sole enrolled account; installing with another administrator's credentials does not enroll a standard-user account.
+
+The preview uses an ACL-restricted ProgramData token and authenticates the service with a fresh HMAC challenge on the same socket before sending credentials. Same-account malware can still read that token. This is not a signed production release; SmartScreen warnings are expected. Service installation and a real connection/disconnect have been verified on the development Windows x64 machine, including IPv6 blocking, tunnel address, routes, exit IP and counters. A clean-machine installation, reboot, upgrades and full uninstall still need separate testing. Do not redistribute before deciding the project's license and reviewing third-party/profile redistribution terms.
+
+Uninstall through Windows Installed Apps. The uninstaller stops/removes the Northstar service and IPv6 rule, but leaves shared OpenVPN and per-user credentials/preferences intact.
+
+Install Git, Node.js 22 or later, Python 3.11 or later, and OpenVPN Community. Then:
+
+```powershell
+python -m venv backend/.venv
+backend/.venv/Scripts/python.exe -m pip install -e "backend[test]"
+npm ci
+npm --prefix frontend ci
+npm run build
+```
+
+Download the official FastVPN OpenVPN profiles from `https://vpn.ncapi.io/groupedServerList.zip` (or from `https://account.fastvpn.com`) and place the extracted `tcp/` and `udp/` folders in the project root. Profile files are ignored by Git.
+
+Start the helper in an **elevated** PowerShell window. The script refuses to run otherwise, generates a strong per-user helper token in `%LOCALAPPDATA%\northstar-vpn\helper.token`, and binds only to loopback:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start-windows-helper.ps1
+```
+
+Start the desktop in a **normal, non-elevated** PowerShell window. It refuses to run elevated. It reads the same helper token automatically:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start-desktop.ps1
+```
+
+Enter FastVPN credentials only in the app's Account panel. They are stored in the Windows Credential Manager through the Python keyring backend; they are never written to the repository.
+
+### Health output on Windows
+
+`/api/health` reports `platform: "windows"`, `vpn_backend: "openvpn-helper"`, `reachable` (helper answered), `helper.available`, `openvpn_exe`, and `protection_available: false`. `network_manager` is `false` and `openvpn_plugin` is retained only for frontend compatibility; Windows does not use NetworkManager. The service uses `reachable` to detect a lost helper.
+
+### Helper security model and remaining limitations
+
+Before any profile reaches OpenVPN, the helper parses it and rebuilds a minimal config from a strict allowlist. Script, plugin, external file, management, server-mode, proxy, compression, and unknown directives are rejected. The helper supplies `remote`, credentials, logging, and status paths itself, validates endpoints and ports, and runs OpenVPN with `--script-security 0`, `--route-method ipapi`, and `--ip-win32 ipapi`.
+
+The helper requires a token of at least 32 characters, compares it in constant time, rejects non-dict requests, checks that peers are loopback, and uses `SO_EXCLUSIVEADDRUSE` on Windows. Credentials and generated configs live in an ACL-restricted per-run directory under `%ProgramData%\NorthstarVPN\runs` and are deleted after disconnect. Profiles are opened only from the configured root; reparse points, hardlinks, non-`.ovpn` files, and files over 1 MiB are rejected.
+
+Remaining Stage 1 limitations:
+
+- The helper still runs from a user-controlled checkout and is launched from an elevated interactive shell. A user who can replace `windows_helper.py`, `openvpn.exe`, or the Python interpreter can influence the elevated process. Stage 3 moves it to an admin-owned service under `C:\Program Files`.
+- The desktop and helper communicate over authenticated loopback TCP. A same-user process that can read the token file can also drive the helper. Stage 3 should use a named pipe with a restrictive DACL and client PID/SID verification.
+- Profile root files are user-writable, so a malicious local profile is still accepted if it passes the allowlist. The allowlist prevents code execution but does not make the profile trustworthy.
+- Windows connections now require a verified outbound IPv6 firewall block before OpenVPN starts. This blocks **all IPv6, including LAN traffic**, on every interface; it does not tunnel IPv6. DNS protection and the IPv4 kill switch remain **unavailable**. A connected tunnel is not full leak protection.
+
+### Windows IPv6 guard and recovery
+
+The helper applies the fixed `NorthstarVPN-Block-IPv6` rule before connecting. Windows Firewall must be enabled on all profiles and local rules must be allowed. If the block cannot be verified, the helper refuses to connect. The rule survives a helper crash and stays enabled during reconnects. **Explicit Disconnect removes it**, even if OpenVPN has already stopped. Adapter IPv6 bindings and unrelated firewall rules are not changed.
+
+If the helper cannot be restarted, first stop/disconnect OpenVPN, then run this recovery command in an elevated PowerShell window to restore ordinary IPv6:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/windows-ipv6-guard.ps1 -Action Disable
+```
+
+Do not remove the rule while relying on the VPN. It is intentionally persistent on crashes; it is not an IPv4 kill switch. The helper uses a private Windows exit event for graceful OpenVPN shutdown so routes can be removed before releasing the block. Tunnel IPv4 reporting comes from the adapter's assigned address, and counters come from OpenVPN statistics (with a Windows adapter fallback), rather than parsing requested addresses from logs.
+
 Desktop favorites and activity history persist locally in `desktop-state.json` in the Electron user-data directory, independently of the loopback port. These files are not part of the repository.

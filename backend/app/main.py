@@ -1,6 +1,8 @@
 from pathlib import Path
 import os
+import platform
 import secrets
+import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
@@ -17,14 +19,23 @@ from .service import MissingCredentials, VpnService
 from .settings import SettingsStore
 from .protection import ProtectionClient
 
-ROOT = Path(__file__).resolve().parents[2]
+if platform.system() == "Windows":
+    from .windows_openvpn import WindowsOpenVpnAdapter
+
+ROOT = Path(sys.executable).resolve().parent.parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[2]
 frontend_dist = ROOT / "frontend" / "dist"
-catalog = ProfileCatalog(Path(os.getenv("VPN_PROFILE_ROOT", ROOT)))
+catalog = ProfileCatalog(ROOT / "profiles" if getattr(sys, "frozen", False) else Path(os.getenv("VPN_PROFILE_ROOT", ROOT)))
 catalog.scan()
-manager = NetworkManagerAdapter()
+if platform.system() == "Windows":
+    manager = WindowsOpenVpnAdapter()
+else:
+    manager = NetworkManagerAdapter()
 store = CredentialStore()
 settings = SettingsStore()
-protection = ProtectionClient(settings)
+if platform.system() == "Windows":
+    protection = None
+else:
+    protection = ProtectionClient(settings)
 service = VpnService(manager, store, catalog, protection, settings)
 
 
@@ -117,7 +128,7 @@ def clear_credentials():
 def test_credentials():
     if not store.get():
         raise HTTPException(428, "credentials required")
-    return {"configured": True, "message": "Credentials are available in Secret Service."}
+    return {"configured": True, "message": "Credentials are available in the operating system credential store."}
 
 @app.get("/api/diagnostics")
 def get_diagnostics():
@@ -129,9 +140,26 @@ def speed_test():
     except Exception as exc: raise HTTPException(502, f"speed test failed: {str(exc)[:120]}")
 
 
+PROTECTION_KEYS = ("ipv6_protection", "dns_protection", "kill_switch", "allow_lan")
+WINDOWS_PROTECTION = {
+    "available": False,
+    "active": False,
+    "platform": "windows",
+    "error": "Windows connections require IPv6 blocking. DNS protection and the kill switch are unavailable.",
+}
+
+
+def effective_settings():
+    values = settings.get()
+    if protection is None:
+        values = {**values, "ipv6_protection": False, "dns_protection": False, "kill_switch": False, "allow_lan": False}
+    return values
+
+
 @app.get("/api/settings")
 def get_settings():
-    return {"settings": settings.get(), "protection": protection.status()}
+    protection_status = protection.status() if protection else WINDOWS_PROTECTION
+    return {"settings": effective_settings(), "protection": protection_status}
 
 
 @app.put("/api/settings")
@@ -139,11 +167,16 @@ def update_settings(values: dict):
     try:
         with service.lock:
             settings.validate(values)
-            updated = {**settings.get(), **values}
-            if any(key in values for key in ("ipv6_protection", "dns_protection", "kill_switch", "allow_lan")):
+            if protection is None and any(values.get(key) is True for key in PROTECTION_KEYS):
+                raise HTTPException(400, "Windows network protection is not implemented yet.")
+            updated = {**effective_settings(), **values}
+            if protection and any(key in values for key in PROTECTION_KEYS):
                 protection.configure(updated)
             settings.save(values)
-            return {"settings": updated, "protection": protection.status()}
+            protection_status = protection.status() if protection else WINDOWS_PROTECTION
+            return {"settings": updated, "protection": protection_status}
+    except HTTPException:
+        raise
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     except RuntimeError as exc:
